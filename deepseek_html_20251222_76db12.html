@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Мини Пакмен</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        
+        #game {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            background: #000;
+            border: 2px solid #00ff00;
+        }
+        
+        #pacman {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: yellow;
+            border-radius: 50%;
+            top: 185px;
+            left: 185px;
+            z-index: 2;
+        }
+        
+        .dot {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+        }
+        
+        .ghost {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border-radius: 15px 15px 0 0;
+            z-index: 1;
+        }
+        
+        #score {
+            color: white;
+            font-size: 24px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: red;
+            font-size: 32px;
+            display: none;
+            z-index: 3;
+        }
+        
+        #restart {
+            background: #00ff00;
+            color: black;
+            border: none;
+            padding: 10px 20px;
+            font-size: 18px;
+            margin-top: 10px;
+            cursor: pointer;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="score">Очки: 0</div>
+        <div id="game">
+            <div id="pacman"></div>
+            <div id="gameOver">ИГРА ОКОНЧЕНА!</div>
+            <div id="dots"></div>
+            <div id="ghosts"></div>
+        </div>
+        <div style="text-align: center; margin-top: 20px;">
+            <button id="restart" onclick="restartGame()">Играть снова</button>
+        </div>
+        <div style="color: white; margin-top: 20px; font-size: 14px;">
+            Управление: Стрелки ←↑→↓
+        </div>
+    </div>
+
+    <script>
+        const game = document.getElementById('game');
+        const pacman = document.getElementById('pacman');
+        const dotsContainer = document.getElementById('dots');
+        const ghostsContainer = document.getElementById('ghosts');
+        const scoreElement = document.getElementById('score');
+        const gameOverElement = document.getElementById('gameOver');
+        const restartButton = document.getElementById('restart');
+        
+        let score = 0;
+        let gameRunning = true;
+        let pacmanX = 185;
+        let pacmanY = 185;
+        let direction = 'right';
+        const ghosts = [];
+        const ghostColors = ['red', 'pink', 'cyan', 'orange'];
+        
+        // Создаём точки
+        function createDots() {
+            dotsContainer.innerHTML = '';
+            for (let y = 20; y < 380; y += 40) {
+                for (let x = 20; x < 380; x += 40) {
+                    const dot = document.createElement('div');
+                    dot.className = 'dot';
+                    dot.style.left = x + 'px';
+                    dot.style.top = y + 'px';
+                    dot.id = `dot_${x}_${y}`;
+                    dotsContainer.appendChild(dot);
+                }
+            }
+        }
+        
+        // Создаём привидений
+        function createGhosts() {
+            ghostsContainer.innerHTML = '';
+            ghosts.length = 0;
+            
+            for (let i = 0; i < 4; i++) {
+                const ghost = document.createElement('div');
+                ghost.className = 'ghost';
+                ghost.style.backgroundColor = ghostColors[i];
+                ghost.style.left = (50 + i * 100) + 'px';
+                ghost.style.top = '50px';
+                
+                ghostsContainer.appendChild(ghost);
+                ghosts.push({
+                    element: ghost,
+                    x: 50 + i * 100,
+                    y: 50,
+                    direction: ['up', 'down', 'left', 'right'][Math.floor(Math.random() * 4)],
+                    speed: 1 + Math.random() * 2
+                });
+            }
+        }
+        
+        // Движение Пакмена
+        function movePacman() {
+            if (!gameRunning) return;
+            
+            // Сохраняем старые координаты на случай столкновения со стеной
+            const oldX = pacmanX;
+            const oldY = pacmanY;
+            
+            // Движение в зависимости от направления
+            switch(direction) {
+                case 'left': pacmanX -= 5; break;
+                case 'right': pacmanX += 5; break;
+                case 'up': pacmanY -= 5; break;
+                case 'down': pacmanY += 5; break;
+            }
+            
+            // Проверка границ
+            if (pacmanX < 0 || pacmanX > 370 || pacmanY < 0 || pacmanY > 370) {
+                pacmanX = oldX;
+                pacmanY = oldY;
+            }
+            
+            // Обновляем позицию
+            pacman.style.left = pacmanX + 'px';
+            pacman.style.top = pacmanY + 'px';
+            
+            // Проверяем съеденные точки
+            checkDots();
+            
+            // Проверяем столкновение с привидениями
+            checkGhostCollision();
+        }
+        
+        // Проверяем точки
+        function checkDots() {
+            const dots = document.querySelectorAll('.dot');
+            dots.forEach(dot => {
+                const dotX = parseInt(dot.style.left);
+                const dotY = parseInt(dot.style.top);
+                
+                // Если Пакмен рядом с точкой (в радиусе 20px)
+                if (Math.abs(pacmanX - dotX) < 20 && Math.abs(pacmanY - dotY) < 20) {
+                    dot.remove();
+                    score += 10;
+                    scoreElement.textContent = 'Очки: ' + score;
+                    
+                    // Проверка победы
+                    if (dots.length === 1) {
+                        gameOverElement.textContent = 'ВЫ ВЫИГРАЛИ!';
+                        gameOverElement.style.color = '#00ff00';
+                        endGame();
+                    }
+                }
+            });
+        }
+        
+        // Движение привидений
+        function moveGhosts() {
+            if (!gameRunning) return;
+            
+            ghosts.forEach(ghost => {
+                // Сохраняем старые координаты
+                const oldX = ghost.x;
+                const oldY = ghost.y;
+                
+                // Движение
+                switch(ghost.direction) {
+                    case 'left': ghost.x -= ghost.speed; break;
+                    case 'right': ghost.x += ghost.speed; break;
+                    case 'up': ghost.y -= ghost.speed; break;
+                    case 'down': ghost.y += ghost.speed; break;
+                }
+                
+                // Проверка границ и смена направления
+                if (ghost.x < 0 || ghost.x > 370 || ghost.y < 0 || ghost.y > 370) {
+                    ghost.x = oldX;
+                    ghost.y = oldY;
+                    ghost.direction = ['left', 'right', 'up', 'down'][Math.floor(Math.random() * 4)];
+                }
+                
+                // Случайная смена направления
+                if (Math.random() < 0.02) {
+                    ghost.direction = ['left', 'right', 'up', 'down'][Math.floor(Math.random() * 4)];
+                }
+                
+                // Обновляем позицию
+                ghost.element.style.left = ghost.x + 'px';
+                ghost.element.style.top = ghost.y + 'px';
+            });
+        }
+        
+        // Проверка столкновения с привидениями
+        function checkGhostCollision() {
+            ghosts.forEach(ghost => {
+                if (Math.abs(pacmanX - ghost.x) < 20 && Math.abs(pacmanY - ghost.y) < 20) {
+                    endGame();
+                }
+            });
+        }
+        
+        // Конец игры
+        function endGame() {
+            gameRunning = false;
+            gameOverElement.style.display = 'block';
+            restartButton.style.display = 'inline-block';
+        }
+        
+        // Перезапуск игры
+        function restartGame() {
+            score = 0;
+            pacmanX = 185;
+            pacmanY = 185;
+            direction = 'right';
+            gameRunning = true;
+            
+            pacman.style.left = pacmanX + 'px';
+            pacman.style.top = pacmanY + 'px';
+            
+            scoreElement.textContent = 'Очки: 0';
+            gameOverElement.style.display = 'none';
+            restartButton.style.display = 'none';
+            gameOverElement.style.color = 'red';
+            gameOverElement.textContent = 'ИГРА ОКОНЧЕНА!';
+            
+            createDots();
+            createGhosts();
+        }
+        
+        // Управление
+        document.addEventListener('keydown', (e) => {
+            if (!gameRunning) return;
+            
+            switch(e.key) {
+                case 'ArrowLeft': direction = 'left'; break;
+                case 'ArrowRight': direction = 'right'; break;
+                case 'ArrowUp': direction = 'up'; break;
+                case 'ArrowDown': direction = 'down'; break;
+            }
+        });
+        
+        // Запускаем игру
+        function initGame() {
+            createDots();
+            createGhosts();
+            
+            // Игровой цикл
+            setInterval(() => {
+                movePacman();
+                moveGhosts();
+            }, 50);
+        }
+        
+        // Запуск при загрузке
+        window.onload = initGame;
+    </script>
+    
+    <!-- Комментарий для лабораторной -->
+    <!-- Игра "Мини Пакмен" создана с помощью ИИ для лабораторной работы по продвижению ПО -->
+</body>
+</html>
